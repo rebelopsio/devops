@@ -1,0 +1,138 @@
+-
+  name: Deploy prerequisites 
+  hosts: web1, db1
+  tasks:
+    - 
+      name: install python3
+      dnf:
+        name: python3
+        state: present
+      become: yes
+    -
+      name: install firewalld
+      dnf:
+        name: firewalld
+        state: present
+      become: yes
+    -
+      name: start firewalld
+      service: 
+        name: firewalld
+        state: started
+        enabled: yes
+      become: yes
+-
+  name: Deploy and configure database
+  hosts: db1
+  tasks:
+    -
+      name: install mariadb-server
+      dnf:
+        name: mariadb-server
+        state: present
+      become: yes
+    -
+      name: start mariadb-server
+      service:
+        name: mariadb
+        state: started
+        enabled: yes
+      become: yes
+    - 
+      name: configure firewall for database
+      firewalld:
+        port: 3306/tcp
+        permanent: yes
+        immediate: yes
+        zone: public
+        state: enabled
+      become: yes
+    
+    -
+      name: install PyMySQL
+      dnf:
+        name: python3-PyMySQL.noarch
+        state: present
+      become: yes
+    - 
+      name: Create a new database with name 'ecomdb'
+      mysql_db:
+        name: ecomdb
+        state: present
+        login_unix_socket: /var/lib/mysql/mysql.sock
+      become: yes
+    - 
+      name: Create database user with name 'ecomuser' and password 'ecompassword' with all database privileges
+      mysql_user:
+        name: ecomuser
+        password: ecompassword
+        priv: '*.*:ALL'
+        state: present
+        login_unix_socket: /var/lib/mysql/mysql.sock
+      become: yes
+    - 
+      name: Run several queries against db ecomdb in single transaction
+      community.mysql.mysql_query:
+        login_db: ecomdb
+        query:
+          - CREATE TABLE products (id mediumint(8) unsigned NOT NULL auto_increment,Name varchar(255) default NULL,Price varchar(255) default NULL, ImageUrl varchar(255) default NULL,PRIMARY KEY (id)) AUTO_INCREMENT=1
+          - INSERT INTO products (Name,Price,ImageUrl) VALUES ("Laptop","100","c-1.png"),("Drone","200","c-2.png"),("VR","300","c-3.png"),("Tablet","50","c-5.png"),("Watch","90","c-6.png"),("Phone Covers","20","c-7.png"),("Phone","80","c-8.png"),("Laptop","150","c-4.png")
+        single_transaction: yes
+        login_unix_socket: /var/lib/mysql/mysql.sock
+      become: yes
+- 
+  name: Deploy and configure web
+  hosts: web1
+  tasks: 
+  - 
+    name: Install prerequisites
+    dnf:
+      name: 
+        - httpd
+        - php
+        - php 
+        - php-cli 
+        - php-php-gettext 
+        - php-mbstring 
+        - php-mcrypt 
+        - php-mysqlnd 
+        - php-pear 
+        - php-curl 
+        - php-gd 
+        - php-xml 
+        - php-bcmath 
+        - php-zip
+        - git
+      state: present
+    become: yes
+  - 
+    name: configure firewall 
+    firewalld:
+      service: http
+      permanent: yes
+      immediate: yes
+      zone: public
+      state: enabled
+    become: yes
+  - 
+    name: configure httpd
+    shell:
+      cmd: sed -i 's/index.html/index.php/g' /etc/httpd/conf/httpd.conf
+    become: yes
+  -
+    name: start httpd
+    service:
+      name: httpd
+      state: started
+      enabled: yes
+    become: yes
+  -
+    name: git website
+    shell:
+      cmd: 'git clone https://github.com/kodekloudhub/learning-app-ecommerce.git /var/www/html/'
+    become: yes
+  -
+    name: update databse in index.php
+    shell: 
+      cmd: sed -i 's/172.20.1.101/173.31.101.211/g' /var/www/html/index.php
+    become: yes
