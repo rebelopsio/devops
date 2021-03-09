@@ -49,10 +49,9 @@
       become: yes
     
     -
-      name: install PyMySQL
-      dnf:
-        name: python3-PyMySQL.noarch
-        state: present
+      name: pip install PyMySQL module
+      pip:
+        name: PyMySQL
       become: yes
     - 
       name: Create a new database with name 'ecomdb'
@@ -71,15 +70,17 @@
         login_unix_socket: /var/lib/mysql/mysql.sock
       become: yes
     - 
-      name: Run several queries against db ecomdb in single transaction
-      community.mysql.mysql_query:
-        login_db: ecomdb
-        query:
-          - CREATE TABLE products (id mediumint(8) unsigned NOT NULL auto_increment,Name varchar(255) default NULL,Price varchar(255) default NULL, ImageUrl varchar(255) default NULL,PRIMARY KEY (id)) AUTO_INCREMENT=1
-          - INSERT INTO products (Name,Price,ImageUrl) VALUES ("Laptop","100","c-1.png"),("Drone","200","c-2.png"),("VR","300","c-3.png"),("Tablet","50","c-5.png"),("Watch","90","c-6.png"),("Phone Covers","20","c-7.png"),("Phone","80","c-8.png"),("Laptop","150","c-4.png")
-        single_transaction: yes
-        login_unix_socket: /var/lib/mysql/mysql.sock
-      become: yes
+      name: copy DB dump file
+      copy:
+        src: db-load-script.sql
+        dest: /tmp
+    - 
+      name: populate all DBs from SQL file
+      mysql_db:
+        name: all
+        state: import
+        target: /tmp/db-load-script.sql
+      when: db_created.changed
 - 
   name: Deploy and configure web
   hosts: web1
@@ -108,7 +109,7 @@
   - 
     name: configure firewall 
     firewalld:
-      service: http
+      port: 80/tcp
       permanent: yes
       immediate: yes
       zone: public
@@ -116,8 +117,10 @@
     become: yes
   - 
     name: configure httpd
-    shell:
-      cmd: sed -i 's/index.html/index.php/g' /etc/httpd/conf/httpd.conf
+    replace: 
+      path: /etc/httpd/conf/httpd.conf
+      regexp: "DirectoryIndex index.html"
+      replace: "DirectoryIndex index.php"
     become: yes
   -
     name: start httpd
@@ -127,12 +130,17 @@
       enabled: yes
     become: yes
   -
-    name: git website
-    shell:
-      cmd: 'git clone https://github.com/kodekloudhub/learning-app-ecommerce.git /var/www/html/'
+    name: download website from git
+    git:
+      repo: git clone https://github.com/kodekloudhub/learning-app-ecommerce.git 
+      dest: /var/www/html/
+      clone: yes
+      update: no
     become: yes
   -
-    name: update databse in index.php
-    shell: 
-      cmd: sed -i 's/172.20.1.101/173.31.101.211/g' /var/www/html/index.php
+    name: update database in index.php
+    replace:
+      path: /var/www/html/index.php
+      regexp: "172.20.1.101"
+      replace: "173.31.101.211"
     become: yes
