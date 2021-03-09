@@ -47,7 +47,6 @@
         zone: public
         state: enabled
       become: yes
-    
     -
       name: pip install PyMySQL module
       pip:
@@ -59,12 +58,14 @@
         name: ecomdb
         state: present
         login_unix_socket: /var/lib/mysql/mysql.sock
+      register: db_created
       become: yes
     - 
       name: Create database user with name 'ecomuser' and password 'ecompassword' with all database privileges
       mysql_user:
         name: ecomuser
         password: ecompassword
+        host: 172.31.96.229
         priv: '*.*:ALL'
         state: present
         login_unix_socket: /var/lib/mysql/mysql.sock
